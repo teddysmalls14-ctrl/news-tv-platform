@@ -10,6 +10,8 @@ from flask_cors import CORS
 from psycopg2.extras import RealDictCursor
 import psycopg2
 
+from rss_feeds import FEEDS, fetch_all_feeds, merge_feeds
+
 app = Flask(__name__)
 CORS(app)
 
@@ -112,6 +114,24 @@ def list_noticias():
     cur.close()
     conn.close()
     return {"noticias": [dict(r) for r in rows]}
+
+
+@app.route("/api/rss-feeds", methods=["GET"])
+def rss_feeds():
+    """Aggregate DR news RSS feeds. Returns merged items with source attribution."""
+    results = fetch_all_feeds()
+    merged = merge_feeds(results, limit=int(request.args.get("limit", 40)))
+    return {"feeds": [{"id": f["id"], "name": f["name"]} for f in FEEDS], "items": merged}
+
+
+@app.route("/api/rss-feed/<feed_id>", methods=["GET"])
+def rss_feed_one(feed_id):
+    """Single source feed."""
+    meta = next((f for f in FEEDS if f["id"] == feed_id), None)
+    if not meta:
+        return {"error": "feed not found"}, 404
+    from rss_feeds import parse_feed
+    return parse_feed(meta)
 
 
 @app.route("/api/pixabay-music", methods=["GET"])
